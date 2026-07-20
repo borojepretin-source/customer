@@ -76,7 +76,7 @@ export function useEmailSend() {
             email: targetEmail,
             photoUrl: uploadedPhotoUrl,
             sessionId: sessionId,
-            photoBase64,
+            photoBase64: photoBase64 ?? undefined,
           });
 
           if (!successResult) {
