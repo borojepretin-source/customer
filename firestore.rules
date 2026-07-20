@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if user is authenticated admin
+    function isAdmin() {
+      return request.auth != null && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/admin/$(request.auth.token.email))
+      );
+    }
+
+    // Admins collections
+    match /admins/{adminId} {
+      allow read: if request.auth != null && request.auth.uid == adminId;
+      allow write: if isAdmin();
+    }
+
+    // Admin collection (with email as doc ID)
+    match /admin/{email} {
+      allow read: if request.auth != null && request.auth.token.email == email;
+      allow write: if isAdmin();
+    }
+
+    // Vouchers (4-digit codes) - readable by all, writable by admins or kiosk update
+    match /vouchers/{voucherCode} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        // Mengizinkan kios non-admin menandai voucher sebagai terpakai secara atomik
+        resource.data.is_used == false &&
+        request.resource.data.is_used == true &&
+        request.resource.data.status == 'USED' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['is_used', 'status', 'used_at', 'session_id'])
+      );
+    }
+
+    // Codes - readable by all, kiosk bisa update status menjadi USED (batch write atomik)
+    match /codes/{codeId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        // Izinkan kios non-admin menandai kode sebagai USED secara atomik
+        resource.data.is_used == false &&
+        request.resource.data.is_used == true &&
+        request.resource.data.status == 'USED' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['is_used', 'status', 'used_at', 'session_id'])
+      );
+    }
+
+    // Templates - readable by all, writable by admins only
+    match /templates/{templateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Sessions - readable and writable by all (photo booth creates and updates)
+    match /sessions/{sessionId} {
+      allow read, write: if true;
+    }
+
+    // Settings - readable by all for real-time sync, writable by admins or kiosk device status updates
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if isAdmin() || doc == 'device_status';
+    }
+  }
+}

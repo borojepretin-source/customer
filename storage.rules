@@ -1,0 +1,29 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Foto yang diupload oleh kiosk (composed photo hasil sesi)
+    // Tidak memerlukan auth karena kiosk berjalan tanpa login
+    match /exports/{sessionId}/{fileName} {
+      allow read: if true;
+      allow write: if true; // kiosk upload tanpa auth
+    }
+
+    // Template images - readonly untuk semua
+    match /templates/{allPaths=**} {
+      allow read: if true;
+      allow write: if false; // hanya via Firebase Console
+    }
+
+    // Logos - readonly untuk semua
+    match /logos/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Default: tolak semua akses lain
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

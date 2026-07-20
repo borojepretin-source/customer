@@ -1,0 +1,324 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import MainLayout from '@/components/layout/MainLayout';
+import PrimaryButton from '@/components/ui/PrimaryButton';
+import SecondaryButton from '@/components/ui/SecondaryButton';
+import PageTitle from '@/components/ui/PageTitle';
+import Card from '@/components/ui/Card';
+import Typography from '@/components/ui/Typography';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
+import { ArrowLeft, Sparkles, Check } from 'lucide-react';
+import { useSessionStore } from '@/store/session_store';
+import { SessionRepository } from '@/repositories/session_repository';
+import { TemplateService } from '@/services/template_service';
+import { TemplateModel } from '@/models/template_model';
+import { LayoutModel } from '@/models/layout_model';
+import { PhotoComposer } from '@/utils/photo_composer';
+import toast from 'react-hot-toast';
+import { useSessionTimer } from '@/hooks/useSessionTimer';
+
+interface PhotoSlot {
+  id: string;
+  dataUrl: string;
+}
+
+const sessionRepository = new SessionRepository();
+
+const FILTERS = [
+  { id: 'none', name: 'Original', class: '', filterVal: 'none' },
+  { id: 'bw', name: 'B&W', class: 'grayscale', filterVal: 'grayscale(1)' },
+  { id: 'vintage', name: 'Vintage', class: 'sepia', filterVal: 'sepia(0.85) contrast(0.95)' },
+  { id: 'warm', name: 'Retro Warm', class: 'sepia-[0.35] saturate-[1.25]', filterVal: 'sepia(0.3) saturate(1.2) contrast(1.05)' },
+];
+
+export default function EditPhotoPage() {
+  const router = useRouter();
+  const { sessionId, capturedPhotos, setCapturedPhotos } = useSessionStore();
+  const [selectedFilter, setSelectedFilter] = useState('none');
+  const [processing, setProcessing] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [template, setTemplate] = useState<TemplateModel | null>(null);
+  const [layout, setLayout] = useState<LayoutModel | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [generatingPreview, setGeneratingPreview] = useState(false);
+
+  // Hentikan timer ketika masuk halaman edit
+  useSessionTimer(true);
+
+  // Blokir navigasi kembali
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+      toast.error('Anda tidak dapat kembali ke halaman sebelumnya.');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionId) {
+      toast.error('Sesi tidak ditemukan.');
+      router.replace('/');
+      return;
+    }
+    if (capturedPhotos.length === 0) {
+      toast.error('Belum ada foto yang diambil.');
+      router.replace('/camera');
+      return;
+    }
+    setIsReady(true);
+
+    const selected = sessionStorage.getItem('boro_selected_template');
+    if (selected) {
+      try {
+        const parsed = JSON.parse(selected);
+        const tplService = new TemplateService();
+        tplService.getActiveTemplates().then((tpls) => {
+          const found = tpls.find((t) => t.id === parsed.id);
+          if (found) setTemplate(found);
+        });
+        tplService.getTemplateLayout(parsed.id).then((lay) => setLayout(lay));
+      } catch (e) {
+        console.error('Failed to load template info', e);
+      }
+    }
+  }, [sessionId, capturedPhotos, router]);
+
+  // Apply CSS filters on a canvas to bake them into the image dataUrls
+  const applyFilterToImage = (dataUrl: string, filterVal: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        // Apply filter to context if not none
+        if (filterVal !== 'none') {
+          ctx.filter = filterVal;
+        }
+
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = (e) => reject(e);
+      img.src = dataUrl;
+    });
+  };
+
+  useEffect(() => {
+    if (!template || !layout || capturedPhotos.length === 0) return;
+
+    let isMounted = true;
+    const generatePreview = async () => {
+      setGeneratingPreview(true);
+      try {
+        const filterObj = FILTERS.find((f) => f.id === selectedFilter);
+        const filterVal = filterObj ? filterObj.filterVal : 'none';
+
+        let filteredPhotos = [...capturedPhotos];
+        if (filterVal !== 'none') {
+          const promises = capturedPhotos.map(async (photo) => {
+            const filteredUrl = await applyFilterToImage(photo.dataUrl, filterVal);
+            return { id: photo.id, dataUrl: filteredUrl };
+          });
+          filteredPhotos = await Promise.all(promises);
+        }
+
+        const blob = await PhotoComposer.compose({
+          template,
+          layout,
+          photos: filteredPhotos,
+        });
+
+        if (isMounted) {
+          if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+          setPreviewBlobUrl(URL.createObjectURL(blob));
+        }
+      } catch (e) {
+        console.error('Failed to generate preview', e);
+      } finally {
+        if (isMounted) setGeneratingPreview(false);
+      }
+    };
+
+    generatePreview();
+    return () => { isMounted = false; };
+  }, [template, layout, capturedPhotos, selectedFilter]);
+
+  const handleSaveAndContinue = async () => {
+    setProcessing(true);
+    try {
+      const filterObj = FILTERS.find((f) => f.id === selectedFilter);
+      const filterVal = filterObj ? filterObj.filterVal : 'none';
+
+      let updatedPhotos: PhotoSlot[] = [];
+
+      if (filterVal === 'none') {
+        updatedPhotos = [...capturedPhotos];
+      } else {
+        // Apply filter to each photo in canvas
+        const promises = capturedPhotos.map(async (photo) => {
+          const filteredUrl = await applyFilterToImage(photo.dataUrl, filterVal);
+          return {
+            id: photo.id,
+            dataUrl: filteredUrl,
+          };
+        });
+        updatedPhotos = await Promise.all(promises);
+      }
+
+      // Save to store and sessionStorage
+      setCapturedPhotos(updatedPhotos);
+      sessionStorage.setItem('boro_captured_photos', JSON.stringify(updatedPhotos));
+
+      if (sessionId) {
+        await sessionRepository.updateStage(sessionId, 'EDIT_PHOTO_COMPLETED');
+      }
+
+      toast.success('Efek foto berhasil disimpan!');
+      router.push('/email');
+    } catch (e) {
+      console.error('Failed to bake filters:', e);
+      toast.error('Gagal menerapkan efek foto.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  if (!isReady) return null;
+
+  const currentFilter = FILTERS.find((f) => f.id === selectedFilter);
+
+  return (
+    <MainLayout step={5} footerHint="Pilih efek filter terbaik untuk foto Anda">
+      <div className="w-full h-full flex flex-col gap-6 max-w-6xl mx-auto px-4 py-6">
+        <PageTitle
+          title="Edit Foto & Efek"
+          subtitle="Tambahkan efek filter estetis untuk mempercantik hasil foto Anda."
+        />
+
+        <div className="grid gap-6 lg:grid-cols-[2.25fr_1fr]">
+          {/* Main Preview Panel */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm"
+          >
+            <div className="mb-4">
+              <Typography variant="label" className="text-black/50 uppercase tracking-[0.28em]">
+                Pratinjau Hasil
+              </Typography>
+            </div>
+
+            {previewBlobUrl ? (
+              <div className="flex justify-center h-[60vh] items-center relative rounded-2xl bg-gray-50 border border-gray-200 p-2">
+                {generatingPreview && (
+                  <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10 rounded-2xl">
+                    <Typography variant="body" className="font-medium animate-pulse text-gray-800">
+                      Menerapkan efek...
+                    </Typography>
+                  </div>
+                )}
+                <img
+                  src={previewBlobUrl}
+                  alt="Template Preview"
+                  className="h-full w-auto object-contain shadow-lg"
+                />
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {capturedPhotos.map((photo, index) => (
+                  <div
+                    key={photo.id || index}
+                    className="aspect-square overflow-hidden rounded-[24px] border border-gray-200 bg-gray-50 flex items-center justify-center relative shadow-inner"
+                  >
+                    <img
+                      src={photo.dataUrl}
+                      alt={`Foto ${index + 1}`}
+                      className={`h-full w-full object-cover transition-all duration-300`}
+                      style={{ filter: currentFilter?.filterVal }}
+                    />
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-[10px] font-bold text-white px-2.5 py-1 rounded-full border border-white/10">
+                      Foto {index + 1}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+
+          {/* Control Panel */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.1 }}
+            className="rounded-[28px] border border-gray-200 bg-white p-5 flex flex-col justify-between shadow-sm"
+          >
+            <div className="space-y-6">
+              <div>
+                <Typography variant="label" className="text-black/50 uppercase tracking-[0.28em]">
+                  Pilih Filter
+                </Typography>
+                <p className="text-xs text-black/40 mt-1">Ketuk filter untuk melihat pratinjau instan</p>
+              </div>
+
+              {/* Filter List */}
+              <div className="grid grid-cols-2 gap-2">
+                {FILTERS.map((filter) => {
+                  const active = filter.id === selectedFilter;
+                  return (
+                    <button
+                      key={filter.id}
+                      onClick={() => setSelectedFilter(filter.id)}
+                      className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
+                        active
+                          ? 'border-[#E83E8C] bg-[#E83E8C]/10 text-[#E83E8C] shadow-sm'
+                          : 'border-gray-200 bg-gray-50 text-black/70 hover:border-gray-300 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Sparkles
+                        size={18}
+                        className={active ? 'text-[#E83E8C] mb-1.5' : 'text-black/40 mb-1.5'}
+                      />
+                      <span className="text-xs font-semibold">{filter.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-3 mt-6">
+              <PrimaryButton
+                size="md"
+                fullWidth
+                onClick={handleSaveAndContinue}
+                disabled={processing}
+                loading={processing}
+              >
+                <Check size={16} />
+                Terapkan & Lanjut
+              </PrimaryButton>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+
+      <LoadingOverlay visible={processing} message="Menerapkan efek filter pada foto..." />
+    </MainLayout>
+  );
+}

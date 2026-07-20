@@ -1,0 +1,169 @@
+import { NextRequest, NextResponse } from 'next/server';
+import * as nodemailer from 'nodemailer';
+
+export async function POST(req: NextRequest) {
+  try {
+    const { email, photo_url, photo_base64, session_id } = await req.json();
+
+    // ── Validasi parameter ──────────────────────────────────────────────────
+    if (!email || (!photo_url && !photo_base64) || !session_id) {
+      return NextResponse.json(
+        { error: 'Parameter email, (photo_url atau photo_base64), dan session_id wajib diisi.' },
+        { status: 400 }
+      );
+    }
+
+    const host = process.env.SMTP_HOST;
+    const port = parseInt(process.env.SMTP_PORT || '587', 10);
+    const secure = process.env.SMTP_SECURE === 'true';
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+
+    if (!host || !user || !pass) {
+      return NextResponse.json(
+        { error: 'SMTP belum dikonfigurasi di server.' },
+        { status: 500 }
+      );
+    }
+
+    let photoBuffer: Buffer;
+
+    if (photo_base64) {
+      // ── Mode lokal: foto dikirim langsung sebagai base64 ─────────────────
+      // Strip data URL prefix jika ada (e.g. "data:image/jpeg;base64,")
+      const base64Data = photo_base64.includes(',') ? photo_base64.split(',')[1] : photo_base64;
+      photoBuffer = Buffer.from(base64Data, 'base64');
+    } else {
+      // ── Mode produksi: fetch foto dari Firebase Storage URL ───────────────
+      const response = await fetch(photo_url);
+      if (!response.ok) {
+        throw new Error(`Gagal mengambil foto dari URL: ${response.statusText}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      photoBuffer = Buffer.from(arrayBuffer);
+    }
+
+    // Pastikan lampiran tidak kosong
+    if (photoBuffer.length === 0) {
+      return NextResponse.json(
+        { error: 'Foto tidak tersedia. Email tidak dikirim tanpa lampiran.' },
+        { status: 422 }
+      );
+    }
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass },
+    });
+
+    const fromAddress = process.env.SMTP_FROM || `"${process.env.SMTP_FROM_NAME || 'Boro Photo Booth'}" <${
+      process.env.SMTP_FROM_EMAIL || user
+    }>`;
+
+    const textBody = `Halo,
+
+Terima kasih telah menggunakan Boro Picture.
+
+Foto yang Anda abadikan telah berhasil diproses dan kami lampirkan pada email ini.
+
+Semoga momen tersebut menjadi kenangan indah bersama keluarga, sahabat, maupun orang tersayang.
+
+Sampai jumpa di sesi foto berikutnya.
+
+Salam,
+Boro Picture`;
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Boro Picture Memories</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f7;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#E6007A,#9b27af);padding:36px 40px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;letter-spacing:-0.5px;">
+                📸 Your Boro Picture Memories
+              </h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 40px;">
+              <p style="margin:0 0 16px;color:#333333;font-size:15px;line-height:1.7;">
+                Halo,
+              </p>
+              <p style="margin:0 0 16px;color:#333333;font-size:15px;line-height:1.7;">
+                Terima kasih telah menggunakan <strong>Boro Picture</strong>.
+              </p>
+              <p style="margin:0 0 16px;color:#333333;font-size:15px;line-height:1.7;">
+                Foto yang Anda abadikan telah berhasil diproses dan kami lampirkan pada email ini.
+              </p>
+              <p style="margin:0 0 24px;color:#333333;font-size:15px;line-height:1.7;">
+                Semoga momen tersebut menjadi kenangan indah bersama keluarga, sahabat, maupun orang tersayang.
+              </p>
+
+              <!-- Divider -->
+              <hr style="border:0;border-top:1px solid #eeeeee;margin:24px 0;" />
+
+              <p style="margin:0 0 8px;color:#333333;font-size:15px;line-height:1.7;">
+                Sampai jumpa di sesi foto berikutnya.
+              </p>
+              <p style="margin:0;color:#555555;font-size:15px;line-height:1.7;">
+                Salam,<br />
+                <strong>Boro Picture</strong>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f9f9fb;padding:20px 40px;text-align:center;border-top:1px solid #eeeeee;">
+              <p style="margin:0;font-size:11px;color:#aaaaaa;">
+                © ${new Date().getFullYear()} Boro Photo Booth. Dikirim dengan 💜
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    await transporter.sendMail({
+      from: fromAddress,
+      to: email,
+      subject: 'Your Boro Picture Memories 📸',
+      text: textBody,
+      html: htmlBody,
+      attachments: [
+        {
+          filename: `BoroPicture_${session_id}.jpg`,
+          content: photoBuffer,
+          contentType: 'image/jpeg',
+        },
+      ],
+    });
+
+    console.log(`[API/send-email] ✅ Email sent to ${email} for session ${session_id}`);
+    return NextResponse.json({ success: true });
+  } catch (e: unknown) {
+    const errMsg = e instanceof Error ? e.message : 'Internal Server Error';
+    console.error('[API/send-email] ❌ Error:', errMsg);
+    return NextResponse.json({ error: errMsg }, { status: 500 });
+  }
+}
