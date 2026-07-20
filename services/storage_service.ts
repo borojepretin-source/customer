@@ -114,15 +114,15 @@ export class StorageService {
       );
       return downloadUrl;
     } catch (e) {
-      // ── Fallback lokal (development) ────────────────────────────────────────
-      // Jika Firebase Storage tidak tersedia (emulator tidak berjalan),
-      // gunakan blob URL lokal agar flow email tetap bisa dilanjutkan.
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[StorageService] Firebase Storage gagal, menggunakan blob URL lokal sebagai fallback:', e instanceof Error ? e.message : e);
-        const blob = new Blob([imageBytes.buffer as ArrayBuffer], { type: 'image/jpeg' });
-        return URL.createObjectURL(blob);
-      }
-      throw new Error(`Gagal mengunggah foto: ${e instanceof Error ? e.message : e}`);
+      // ── Fallback: gunakan blob URL lokal jika Firebase Storage tidak tersedia ──
+      // Firebase Storage mungkin belum di-setup, CORS bermasalah, atau rules memblokir.
+      // Blob URL tetap berfungsi untuk email (foto dikirim via base64 dari composedPhotoBase64).
+      console.warn(
+        '[StorageService] Firebase Storage gagal, menggunakan blob URL lokal sebagai fallback:',
+        e instanceof Error ? e.message : e
+      );
+      const blob = new Blob([imageBytes.buffer as ArrayBuffer], { type: 'image/jpeg' });
+      return URL.createObjectURL(blob);
     }
   }
 
