@@ -71,7 +71,6 @@ export default function CameraPage() {
   const sessionTimeLeft = useSessionTimer(false, () => {
     if (photoSlots.length > 0) {
       setCapturedPhotos(photoSlots);
-      sessionStorage.setItem('boro_captured_photos', JSON.stringify(photoSlots));
       if (sessionId) {
         sessionRepository.updatePhotoCount({ sessionId, photoCount: photoSlots.length }).catch(console.error);
         sessionRepository.updateStage(sessionId, 'PHOTO_CAPTURED').catch(console.error);
@@ -169,32 +168,6 @@ export default function CameraPage() {
     // Jeda 1 detik tambahan sebelum memotret
     await new Promise<void>((resolve) => setTimeout(resolve, 1000));
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    let width = video.videoWidth || 1280;
-    let height = video.videoHeight || 720;
-
-    if (streamRef.current) {
-      const track = streamRef.current.getVideoTracks()[0];
-      if (track) {
-        const settings = track.getSettings();
-        if (settings.width && settings.height) {
-          width = settings.width;
-          height = settings.height;
-        }
-      }
-    }
-
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-
-    if (!context) {
-      setIsCapturing(false);
-      return;
-    }
-
     // Shutter Visual and Sound
     setShowFlash(true);
     try {
@@ -209,8 +182,57 @@ export default function CameraPage() {
       setShowFlash(false);
     }, 150);
 
-    context.drawImage(video, 0, 0, width, height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    let dataUrl = '';
+    const track = streamRef.current?.getVideoTracks()[0];
+
+    // Coba gunakan ImageCapture API (untuk benar-benar memfoto dari hardware)
+    try {
+      // @ts-ignore - ImageCapture mungkin tidak dikenali oleh TS standar
+      if (track && typeof ImageCapture !== 'undefined') {
+        // @ts-ignore
+        const imageCapture = new ImageCapture(track);
+        const blob = await imageCapture.takePhoto();
+        
+        // Konversi blob ke base64 (DataURL)
+        const reader = new FileReader();
+        dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (e) {
+      console.warn('ImageCapture failed atau tidak didukung, menggunakan fallback canvas:', e);
+    }
+
+    // Jika ImageCapture gagal atau tidak didukung, fallback ke metode Canvas (grab frame)
+    if (!dataUrl) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      let width = video.videoWidth || 1280;
+      let height = video.videoHeight || 720;
+
+      if (track) {
+        const settings = track.getSettings();
+        if (settings.width && settings.height) {
+          width = settings.width;
+          height = settings.height;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        setIsCapturing(false);
+        return;
+      }
+
+      context.drawImage(video, 0, 0, width, height);
+      dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    }
 
     setPhotoSlots((prev) => {
       const next = [...prev, { id: `${Date.now()}`, dataUrl }];
@@ -225,7 +247,6 @@ export default function CameraPage() {
 
   const handleFinish = async () => {
     setCapturedPhotos(photoSlots);
-    sessionStorage.setItem('boro_captured_photos', JSON.stringify(photoSlots));
     
     if (sessionId) {
       try {

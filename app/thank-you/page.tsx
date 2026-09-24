@@ -30,7 +30,7 @@ export default function ThankYouPage() {
           <div className="relative flex items-center justify-center">
             <Image
               src="/assets/logo/logo.png"
-              alt="Boro Picture Logo"
+              alt="Sesijepret Logo"
               width={180}
               height={180}
               priority

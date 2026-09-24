@@ -180,9 +180,8 @@ export default function EditPhotoPage() {
         updatedPhotos = await Promise.all(promises);
       }
 
-      // Save to store and sessionStorage
+      // Save to store
       setCapturedPhotos(updatedPhotos);
-      sessionStorage.setItem('boro_captured_photos', JSON.stringify(updatedPhotos));
 
       if (sessionId) {
         await sessionRepository.updateStage(sessionId, 'EDIT_PHOTO_COMPLETED');

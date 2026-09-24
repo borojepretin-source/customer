@@ -12,7 +12,7 @@ const itim = Itim({
 });
 
 export const metadata: Metadata = {
-  title: 'Boro Photo Booth',
+  title: 'Sesijepret Photo Booth',
   description: 'Capture Your Moments — Professional Photo Booth Experience',
 };
 

@@ -40,19 +40,11 @@ export default function PreviewPage() {
   });
 
   useEffect(() => {
-    // Sync dengan Zustand store, fallback ke sessionStorage
+    // Gunakan murni Zustand store dalam-memori untuk menghindari QuotaExceededError
     if (storePhotos && storePhotos.length > 0) {
       setPhotoSlots(storePhotos);
     } else {
-      const savedPhotos = sessionStorage.getItem('boro_captured_photos');
-      if (savedPhotos) {
-        try {
-          const parsed = JSON.parse(savedPhotos) as PhotoSlot[];
-          setPhotoSlots(parsed.filter((item) => typeof item?.dataUrl === 'string'));
-        } catch {
-          setPhotoSlots([]);
-        }
-      }
+      setPhotoSlots([]);
     }
 
     if (storeTemplateName) {
@@ -88,7 +80,6 @@ export default function PreviewPage() {
   const composedUrl = composedPhotoBlobUrl || composedPhotoBase64 || null;
 
   const handleRetakeAll = async () => {
-    sessionStorage.removeItem('boro_captured_photos');
     useSessionStore.getState().setCapturedPhotos([]);
     useSessionStore.getState().setComposedPhotoBase64(null);
     useSessionStore.getState().setComposedPhotoBlobUrl(null);

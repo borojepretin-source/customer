@@ -25,7 +25,7 @@ export default function Header({ step = 0, totalSteps = 7, headerLeftElement }: 
       {/* Logo area */}
       <div className="flex items-center gap-4">
         <div className="flex items-center justify-center">
-          <img src="/assets/logo/logo.png" alt="Boro Jepret Logo" className="w-auto h-12 object-contain" />
+          <img src="/assets/logo/logo.png" alt="Sesijepret Logo" className="w-auto h-12 object-contain" />
         </div>
         {headerLeftElement}
       </div>
@@ -41,7 +41,7 @@ export default function Header({ step = 0, totalSteps = 7, headerLeftElement }: 
 
       {/* Right spacer / future: session timer */}
       <div className="hidden w-[120px] justify-end sm:flex">
-        <span className="text-xs text-black/50 font-medium">Boro Photo Booth</span>
+        <span className="text-xs text-black/50 font-medium">Sesijepret Photo Booth</span>
       </div>
     </header>
   );

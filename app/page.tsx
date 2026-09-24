@@ -32,7 +32,7 @@ export default function WelcomePage() {
             <div className="mb-8">
               <Image
                 src="/assets/logo/logo.png"
-                alt="Boro Picture"
+                alt="Sesijepret"
                 width={180}
                 height={60}
                 priority
@@ -41,7 +41,7 @@ export default function WelcomePage() {
             </div>
 
             <PageTitle
-              title="Selamat Datang di Boro Picture"
+              title="Selamat Datang di Sesijepret"
               subtitle="Abadikan momen seru bersama teman dan keluarga di photo booth kami."
               centered={false}
             />

@@ -73,9 +73,9 @@ export const useSessionStore = create<SessionState>()(
         voucherCode: state.voucherCode,
         selectedTemplateId: state.selectedTemplateId,
         selectedTemplateName: state.selectedTemplateName,
-        capturedPhotos: state.capturedPhotos,
+        // capturedPhotos TIDAK disimpan ke sessionStorage agar tidak error QuotaExceeded
         uploadedPhotoUrl: state.uploadedPhotoUrl,
-        composedPhotoBase64: state.composedPhotoBase64,
+        // composedPhotoBase64 TIDAK disimpan ke sessionStorage
         email: state.email,
       }),
     }

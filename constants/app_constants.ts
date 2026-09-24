@@ -1,6 +1,6 @@
 export const AppConstants = {
   // App Info
-  appName: 'Boro Photo Booth',
+  appName: 'Sesijepret Photo Booth',
   appTagline: 'Capture Your Moments',
 
   // Timer Durations (in seconds) — defaults, overridden by Firestore /settings/config

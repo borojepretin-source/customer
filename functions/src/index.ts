@@ -68,13 +68,13 @@ export const sendPhotoEmail = onCall({ maxInstances: 10 }, async (request) => {
     const transporter = getTransporter();
 
     // 3. Susun isi email sesuai spesifikasi
-    const fromAddress = process.env.SMTP_FROM || `"${process.env.SMTP_FROM_NAME || 'Boro Photo Booth'}" <${
+    const fromAddress = process.env.SMTP_FROM || `"${process.env.SMTP_FROM_NAME || 'Sesijepret Photo Booth'}" <${
       process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER
     }>`;
 
     const textBody = `Halo,
 
-Terima kasih telah menggunakan Boro Picture.
+Terima kasih telah menggunakan Sesijepret.
 
 Foto yang Anda abadikan telah berhasil diproses dan kami lampirkan pada email ini.
 
@@ -83,7 +83,7 @@ Semoga momen tersebut menjadi kenangan indah bersama keluarga, sahabat, maupun o
 Sampai jumpa di sesi foto berikutnya.
 
 Salam,
-Boro Picture`;
+Sesijepret`;
 
     const htmlBody = `
 <!DOCTYPE html>
@@ -91,7 +91,7 @@ Boro Picture`;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Boro Picture Memories</title>
+  <title>Your Sesijepret Memories</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f7;font-family:Arial,Helvetica,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;padding:40px 0;">
@@ -103,7 +103,7 @@ Boro Picture`;
           <tr>
             <td style="background:linear-gradient(135deg,#E6007A,#9b27af);padding:36px 40px;text-align:center;">
               <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;letter-spacing:-0.5px;">
-                📸 Your Boro Picture Memories
+                📸 Your Sesijepret Memories
               </h1>
             </td>
           </tr>
@@ -115,7 +115,7 @@ Boro Picture`;
                 Halo,
               </p>
               <p style="margin:0 0 16px;color:#333333;font-size:15px;line-height:1.7;">
-                Terima kasih telah menggunakan <strong>Boro Picture</strong>.
+                Terima kasih telah menggunakan <strong>Sesijepret</strong>.
               </p>
               <p style="margin:0 0 16px;color:#333333;font-size:15px;line-height:1.7;">
                 Foto yang Anda abadikan telah berhasil diproses dan kami lampirkan pada email ini.
@@ -132,7 +132,7 @@ Boro Picture`;
               </p>
               <p style="margin:0;color:#555555;font-size:15px;line-height:1.7;">
                 Salam,<br />
-                <strong>Boro Picture</strong>
+                <strong>Sesijepret</strong>
               </p>
             </td>
           </tr>
@@ -141,7 +141,7 @@ Boro Picture`;
           <tr>
             <td style="background:#f9f9fb;padding:20px 40px;text-align:center;border-top:1px solid #eeeeee;">
               <p style="margin:0;font-size:11px;color:#aaaaaa;">
-                © ${new Date().getFullYear()} Boro Photo Booth. Dikirim dengan 💜
+                © ${new Date().getFullYear()} Sesijepret Photo Booth. Dikirim dengan 💜
               </p>
             </td>
           </tr>
@@ -157,12 +157,12 @@ Boro Picture`;
     const mailOptions = {
       from: fromAddress,
       to: email,
-      subject: 'Your Boro Picture Memories 📸',
+      subject: 'Your Sesijepret Memories 📸',
       text: textBody,
       html: htmlBody,
       attachments: [
         {
-          filename: `BoroPicture_${sessionId}.jpg`,
+          filename: `Sesijepret_${sessionId}.jpg`,
           content: photoBuffer,
           contentType: 'image/jpeg',
         },

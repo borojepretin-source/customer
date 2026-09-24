@@ -86,7 +86,7 @@ export class EmailService {
         email,
         photo_url: photoUrl,
         session_id: sessionId,
-        recipient_name: recipientName || 'Pelanggan Boro',
+        recipient_name: recipientName || 'Pelanggan Sesijepret',
       });
       return result.data.success === true;
     } catch (e: any) {
@@ -108,7 +108,7 @@ export class EmailService {
     const body: Record<string, string | undefined> = {
       email,
       session_id: sessionId,
-      recipient_name: recipientName || 'Pelanggan Boro',
+      recipient_name: recipientName || 'Pelanggan Sesijepret',
     };
 
     if (photoBase64) {

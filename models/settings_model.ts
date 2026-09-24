@@ -15,7 +15,7 @@ export class SettingsModel implements ISettings {
     this.sessionDuration = data.sessionDuration ?? 600;
     this.inactivityTimeout = data.inactivityTimeout ?? 120;
     this.logoUrl = data.logoUrl ?? '';
-    this.boothName = data.boothName ?? 'Boro Photo Booth';
+    this.boothName = data.boothName ?? 'Sesijepret Photo Booth';
     this.photoCount = data.photoCount ?? 4;
     this.printSize = data.printSize ?? '4R';
     this.emailEnabled = data.emailEnabled ?? true;
@@ -28,7 +28,7 @@ export class SettingsModel implements ISettings {
       sessionDuration: typeof data.session_duration === 'number' ? data.session_duration : 600,
       inactivityTimeout: typeof data.inactivity_timeout === 'number' ? data.inactivity_timeout : 120,
       logoUrl: data.logo_url || '',
-      boothName: data.booth_name || 'Boro Photo Booth',
+      boothName: data.booth_name || 'Sesijepret Photo Booth',
       photoCount: typeof data.photo_count === 'number' ? data.photo_count : 4,
       printSize: data.print_size || '4R',
       emailEnabled: data.email_enabled !== undefined ? !!data.email_enabled : true,
