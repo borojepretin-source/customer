@@ -56,7 +56,7 @@ export default function EmailPage() {
       }
 
       // Sudah di-compose sebelumnya → skip
-      if (uploadedPhotoUrl && composedPhotoBase64) {
+      if (composedPhotoBase64) {
         return;
       }
 
@@ -100,16 +100,26 @@ export default function EmailPage() {
         const arrayBuffer = await blob.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
 
-        await storageService.saveToLocalStorage({ sessionId, imageBytes: bytes });
+        // Local IndexedDB save (non-fatal)
+        try {
+          await storageService.saveToLocalStorage({ sessionId, imageBytes: bytes });
+        } catch (localErr) {
+          console.warn('[EmailPage] Local save gagal (non-fatal):', localErr);
+        }
 
+        // Upload ke Firebase Storage (sudah ada fallback ke blob URL di dalamnya)
         const downloadUrl = await storageService.uploadComposedPhoto({
           sessionId,
           imageBytes: bytes,
         });
         setUploadedPhotoUrl(downloadUrl);
 
-        // ── 6. Update stage di Firestore ────────────────────────────────────
-        await sessionRepository.updateStage(sessionId, 'PHOTO_COMPOSED');
+        // ── 6. Update stage di Firestore (non-fatal) ──────────────────────
+        try {
+          await sessionRepository.updateStage(sessionId, 'PHOTO_COMPOSED');
+        } catch (firestoreErr) {
+          console.warn('[EmailPage] Firestore updateStage gagal (non-fatal):', firestoreErr);
+        }
       } catch (e: any) {
         console.error('[EmailPage] Gagal compose/upload foto:', e);
         setPrepError(e.message || 'Gagal memproses foto.');
@@ -199,7 +209,7 @@ export default function EmailPage() {
             id="send-email-btn"
             size="lg"
             fullWidth
-            disabled={!isValidEmail(emailInput) || preparing || sending || !uploadedPhotoUrl}
+            disabled={!isValidEmail(emailInput) || preparing || sending || (!uploadedPhotoUrl && !composedPhotoBase64)}
             onClick={handleSendEmail}
             loading={sending}
           >

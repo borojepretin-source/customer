@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -26,8 +26,10 @@ export default function CameraPage() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [supportMessage, setSupportMessage] = useState<string | null>(null);
+  const [showFlash, setShowFlash] = useState(false);
   const [photoSlots, setPhotoSlots] = useState<PhotoSlot[]>([]);
   const [countdown, setCountdown] = useState<number>(0);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -36,6 +38,17 @@ export default function CameraPage() {
 
   const sessionId = useSessionStore((state) => state.sessionId);
   const setCapturedPhotos = useSessionStore((state) => state.setCapturedPhotos);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setStream(null);
+  }, []);
 
   const canCapture = !!stream && !isCapturing && photoSlots.length < photoSlotsCount;
   const hasPhotos = photoSlots.length > 0;
@@ -63,8 +76,10 @@ export default function CameraPage() {
         sessionRepository.updatePhotoCount({ sessionId, photoCount: photoSlots.length }).catch(console.error);
         sessionRepository.updateStage(sessionId, 'PHOTO_CAPTURED').catch(console.error);
       }
+      stopCamera();
       router.push('/edit-photo');
     } else {
+      stopCamera();
       router.push('/');
     }
   });
@@ -80,6 +95,15 @@ export default function CameraPage() {
   }, [photoSlots.length, photoSlotsCount]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const stopExistingStream = () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+
     const init = async () => {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setSupportMessage('Perangkat Anda tidak mendukung kamera web. Gunakan browser yang mendukung MediaDevices API.');
@@ -87,11 +111,18 @@ export default function CameraPage() {
       }
 
       try {
+        stopExistingStream();
         const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         });
 
+        if (!isMounted) {
+          mediaStream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        streamRef.current = mediaStream;
         setStream(mediaStream);
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
@@ -105,11 +136,10 @@ export default function CameraPage() {
     init();
 
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      isMounted = false;
+      stopCamera();
     };
-  }, []);
+  }, [stopCamera]);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -141,8 +171,20 @@ export default function CameraPage() {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const width = video.videoWidth || 1280;
-    const height = video.videoHeight || 720;
+    
+    let width = video.videoWidth || 1280;
+    let height = video.videoHeight || 720;
+
+    if (streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track) {
+        const settings = track.getSettings();
+        if (settings.width && settings.height) {
+          width = settings.width;
+          height = settings.height;
+        }
+      }
+    }
 
     canvas.width = width;
     canvas.height = height;
@@ -153,8 +195,22 @@ export default function CameraPage() {
       return;
     }
 
+    // Shutter Visual and Sound
+    setShowFlash(true);
+    try {
+      const shutterAudio = new Audio('/sounds/shutter.mp3');
+      shutterAudio.play().catch(() => {
+        // Ignore autoplay errors
+      });
+    } catch (e) {
+      // Ignore audio creation errors
+    }
+    setTimeout(() => {
+      setShowFlash(false);
+    }, 150);
+
     context.drawImage(video, 0, 0, width, height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
     setPhotoSlots((prev) => {
       const next = [...prev, { id: `${Date.now()}`, dataUrl }];
@@ -180,6 +236,7 @@ export default function CameraPage() {
       }
     }
     
+    stopCamera();
     router.push('/preview');
   };
 
@@ -228,6 +285,10 @@ export default function CameraPage() {
             autoPlay
             disablePictureInPicture
           />
+
+          {showFlash && (
+            <div className="absolute inset-0 bg-white z-50 pointer-events-none" />
+          )}
 
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/80" />
 

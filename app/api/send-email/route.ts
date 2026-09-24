@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as nodemailer from 'nodemailer';
 
+// Izinkan waktu eksekusi lebih lama untuk pengiriman email SMTP
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const { email, photo_url, photo_base64, session_id } = await req.json();
@@ -27,10 +30,18 @@ export async function POST(req: NextRequest) {
     }
 
     let photoBuffer: Buffer;
+    let detectedMime = 'image/png'; // default, since compose outputs PNG
 
     if (photo_base64) {
       // ── Mode lokal: foto dikirim langsung sebagai base64 ─────────────────
-      // Strip data URL prefix jika ada (e.g. "data:image/jpeg;base64,")
+      // Detect MIME from data URL prefix (e.g. "data:image/png;base64,")
+      if (photo_base64.startsWith('data:')) {
+        const mimeMatch = photo_base64.match(/^data:(image\/[a-z]+);base64,/);
+        if (mimeMatch) {
+          detectedMime = mimeMatch[1];
+        }
+      }
+      // Strip data URL prefix jika ada
       const base64Data = photo_base64.includes(',') ? photo_base64.split(',')[1] : photo_base64;
       photoBuffer = Buffer.from(base64Data, 'base64');
     } else {
@@ -39,9 +50,15 @@ export async function POST(req: NextRequest) {
       if (!response.ok) {
         throw new Error(`Gagal mengambil foto dari URL: ${response.statusText}`);
       }
+      detectedMime = response.headers.get('content-type') || 'image/jpeg';
       const arrayBuffer = await response.arrayBuffer();
       photoBuffer = Buffer.from(arrayBuffer);
     }
+
+    console.log(`[API/send-email] Received request: email=${email}, session_id=${session_id}`);
+    console.log(`[API/send-email] photo_base64 provided: ${!!photo_base64}, length: ${photo_base64?.length || 0}`);
+    console.log(`[API/send-email] photo_url provided: ${!!photo_url}, value: ${photo_url || 'none'}`);
+    console.log(`[API/send-email] Photo buffer size: ${photoBuffer.length} bytes (${(photoBuffer.length / 1024).toFixed(1)} KB), MIME: ${detectedMime}`);
 
     // Pastikan lampiran tidak kosong
     if (photoBuffer.length === 0) {
@@ -144,6 +161,8 @@ Boro Picture`;
 </html>
     `;
 
+    const fileExt = detectedMime === 'image/png' ? 'png' : 'jpg';
+
     await transporter.sendMail({
       from: fromAddress,
       to: email,
@@ -152,9 +171,9 @@ Boro Picture`;
       html: htmlBody,
       attachments: [
         {
-          filename: `BoroPicture_${session_id}.jpg`,
+          filename: `BoroPicture_${session_id}.${fileExt}`,
           content: photoBuffer,
-          contentType: 'image/jpeg',
+          contentType: detectedMime,
         },
       ],
     });

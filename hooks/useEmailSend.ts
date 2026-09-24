@@ -45,7 +45,7 @@ export function useEmailSend() {
       return;
     }
 
-    if (!sessionId || !uploadedPhotoUrl) {
+    if (!sessionId || (!uploadedPhotoUrl && !composedPhotoBase64)) {
       toast.error('Sesi aktif atau foto hasil akhir tidak ditemukan.');
       return;
     }
@@ -61,10 +61,10 @@ export function useEmailSend() {
       // Konversi foto ke base64 terlebih dahulu (sekali saja, sebelum retry)
       // Ini menghindari masalah fetch Firebase Storage dari server-side
       let photoBase64 = composedPhotoBase64;
-      if (!photoBase64) {
+      if (!photoBase64 && uploadedPhotoUrl) {
         photoBase64 = await resolvePhotoBase64(uploadedPhotoUrl) || null;
       }
-      
+
       if (!photoBase64) {
         console.warn('[useEmailSend] Tidak bisa konversi foto ke base64, akan coba via photo_url.');
       }
@@ -74,7 +74,7 @@ export function useEmailSend() {
         async () => {
           const successResult = await emailService.sendPhotoEmail({
             email: targetEmail,
-            photoUrl: uploadedPhotoUrl,
+            photoUrl: uploadedPhotoUrl || '',
             sessionId: sessionId,
             photoBase64: photoBase64 ?? undefined,
           });
